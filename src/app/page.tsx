@@ -166,6 +166,21 @@ export default function StockSnap() {
     await supabase.from('orders').update({ status: newStatus }).eq('id', orderId);
   };
 
+  const handleCancelOrder = async (orderId: string) => {
+    if (!window.confirm('¿Seguro que quieres cancelar este pedido? El stock volverá al inventario.')) return;
+
+    const { error } = await supabase.rpc('cancel_order_and_restock', {
+      p_order_id: orderId
+    });
+    if (error) console.error('Error cancelando pedido:', error);
+  };
+
+  const copyToWhatsApp = (order: Order) => {
+    const text = `Qué pasa ${order.customer_info}! 🤝\nTu pedido está reservado:\n👕 ${order.products?.name} - ${order.products?.color} (Talla ${order.size})\n\nCuando puedas pásame el Bizum y lo dejamos cerrado 💸`;
+    navigator.clipboard.writeText(text);
+    alert('Mensaje copiado al portapapeles');
+  };
+
   // --- LÓGICA DE FILTRADO ---
   const filteredOrders = orders.filter(order => {
     const matchStatus = filterStatus === 'all' || order.status === filterStatus;
@@ -220,6 +235,27 @@ export default function StockSnap() {
         {/* PESTAÑA: PEDIDOS */}
         {activeTab === 'orders' && (
           <div className="space-y-4">
+
+            {/* HUD de Métricas Rápidas (Grid 2x2 para móvil) */}
+            <div className="grid grid-cols-2 gap-2 mb-4 font-mono font-bold text-xs text-center">
+              <div className="bg-yellow-100 border-2 border-black p-2">
+                <span className="block text-xl font-black">{orders.filter(o => o.status === 'pendiente_pago').length}</span>
+                Pendiente de pago
+              </div>
+              <div className="bg-green-100 border-2 border-black p-2">
+                <span className="block text-xl font-black">{orders.filter(o => o.status === 'pagado').length}</span>
+                Pagado
+              </div>
+              <div className="bg-blue-100 border-2 border-black p-2">
+                <span className="block text-xl font-black">{orders.filter(o => o.status === 'entregado').length}</span>
+                Entregado
+              </div>
+              <div className="bg-red-100 border-2 border-black p-2">
+                <span className="block text-xl font-black">{orders.filter(o => o.status === 'cancelado').length}</span>
+                Cancelado
+              </div>
+            </div>
+
             <button
               onClick={() => setIsModalOpen(true)}
               className="w-full bg-[#ccff00] text-black border-4 border-black p-4 font-black uppercase text-xl shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] active:translate-y-[4px] active:translate-x-[4px] active:shadow-none transition-all mb-4"
@@ -235,9 +271,10 @@ export default function StockSnap() {
                 className="flex-1 border-2 border-black p-2 font-bold text-xs uppercase bg-white outline-none focus:bg-gray-100"
               >
                 <option value="all">Todos los estados</option>
-                <option value="pendiente_pago">Pendientes</option>
-                <option value="pagado">Pagados</option>
-                <option value="entregado">Entregados</option>
+                <option value="pendiente_pago">Pendiente de pago</option>
+                <option value="pagado">Pagado</option>
+                <option value="entregado">Entregado</option>
+                <option value="cancelado">Cancelado</option>
               </select>
 
               <select
@@ -246,7 +283,6 @@ export default function StockSnap() {
                 className="flex-1 border-2 border-black p-2 font-bold text-xs uppercase bg-white outline-none focus:bg-gray-100"
               >
                 <option value="all">Todas las prendas</option>
-                {/* Extraemos nombres únicos de productos para el filtro */}
                 {Array.from(new Set(products.map(p => p.name))).map(name => (
                   <option key={name} value={name}>{name}</option>
                 ))}
@@ -255,28 +291,52 @@ export default function StockSnap() {
 
             {/* LISTA DE PEDIDOS FILTRADA */}
             {filteredOrders.length === 0 ? (
-              <p className="text-center font-mono font-bold text-gray-500 py-10">No hay pedidos que coincidan con el filtro.</p>
+              <p className="text-center font-mono font-bold text-gray-500 py-10">No hay pedidos que coincidan.</p>
             ) : (
               filteredOrders.map(order => (
-                <div key={order.id} className="bg-white border-4 border-black p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                <div key={order.id} className={`border-4 border-black p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${order.status === 'cancelado' ? 'bg-red-50 opacity-60' : 'bg-white'}`}>
                   <div className="flex justify-between items-start mb-2 border-b-2 border-black pb-2">
                     <div>
-                      <h3 className="font-black text-lg">{order.customer_info}</h3>
+                      <h3 className={`font-black text-lg ${order.status === 'cancelado' ? 'line-through' : ''}`}>{order.customer_info}</h3>
                       <p className="font-mono text-sm font-bold bg-gray-100 inline-block px-1 border border-black mt-1">
                         {order.products?.name} - {order.products?.color} (Talla {order.size})
                       </p>
                     </div>
+
+                    {/* Botón rápido de WhatsApp solo si está pendiente */}
+                    {order.status === 'pendiente_pago' && (
+                      <button onClick={() => copyToWhatsApp(order)} className="text-2xl hover:scale-110 transition-transform" title="Copiar mensaje">
+                        💬
+                      </button>
+                    )}
                   </div>
 
                   <div className="flex gap-2 mt-3">
                     {order.status === 'pendiente_pago' && (
                       <button onClick={() => handleUpdateOrderStatus(order.id, 'pagado')} className="flex-1 bg-yellow-400 border-2 border-black py-2 font-black uppercase text-xs active:bg-yellow-500 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-[2px] active:translate-x-[2px] active:shadow-none">Marcar Pagado</button>
                     )}
+
                     {order.status === 'pagado' && (
                       <button onClick={() => handleUpdateOrderStatus(order.id, 'entregado')} className="flex-1 bg-green-400 border-2 border-black py-2 font-black uppercase text-xs active:bg-green-500 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-[2px] active:translate-x-[2px] active:shadow-none">Marcar Entregado</button>
                     )}
+
                     {order.status === 'entregado' && (
                       <span className="flex-1 bg-gray-200 border-2 border-black py-2 font-black uppercase text-xs text-center">Entregado ✓</span>
+                    )}
+
+                    {order.status === 'cancelado' && (
+                      <span className="flex-1 bg-red-200 border-2 border-red-800 text-red-800 py-2 font-black uppercase text-xs text-center">Cancelado 🚫</span>
+                    )}
+
+                    {/* El botón de cancelar está disponible en cualquier estado, excepto si ya está cancelado */}
+                    {order.status !== 'cancelado' && (
+                      <button
+                        onClick={() => handleCancelOrder(order.id)}
+                        className="px-3 bg-red-400 border-2 border-black py-2 font-black uppercase text-xs text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-[2px] active:translate-x-[2px] active:shadow-none"
+                        title="Cancelar y reponer stock"
+                      >
+                        ✖
+                      </button>
                     )}
                   </div>
                 </div>
