@@ -45,7 +45,8 @@ export default function StockSnap() {
 
   // Form States para Nuevo Pedido
   const [newOrderCustomer, setNewOrderCustomer] = useState('');
-  const [newOrderProduct, setNewOrderProduct] = useState('');
+  const [newOrderProductName, setNewOrderProductName] = useState('');
+  const [newOrderProductColor, setNewOrderProductColor] = useState('');
   const [newOrderSize, setNewOrderSize] = useState('');
   const [orderError, setOrderError] = useState('');
 
@@ -130,14 +131,19 @@ export default function StockSnap() {
     e.preventDefault();
     setOrderError('');
 
-    if (!newOrderCustomer || !newOrderProduct || !newOrderSize) {
+    // Buscar el producto exacto seleccionado para obtener su ID
+    const selectedProduct = products.find(
+      p => p.name === newOrderProductName && p.color === newOrderProductColor
+    );
+
+    if (!newOrderCustomer || !selectedProduct || !newOrderSize) {
       setOrderError('Faltan datos');
       return;
     }
 
     const { error } = await supabase.rpc('process_new_order', {
       p_customer_info: newOrderCustomer,
-      p_product_id: newOrderProduct,
+      p_product_id: selectedProduct.id,
       p_size: newOrderSize
     });
 
@@ -146,7 +152,8 @@ export default function StockSnap() {
     } else {
       setIsModalOpen(false);
       setNewOrderCustomer('');
-      setNewOrderProduct('');
+      setNewOrderProductName('');
+      setNewOrderProductColor('');
       setNewOrderSize('');
     }
   };
@@ -286,24 +293,68 @@ export default function StockSnap() {
                 <input type="text" value={newOrderCustomer} onChange={e => setNewOrderCustomer(e.target.value)} className="w-full border-2 border-black p-3 font-mono" placeholder="@usuario_ig" required />
               </div>
 
+              {/* Selector 1: Modelo (Agrupado) */}
               <div>
-                <label className="block font-mono font-bold text-sm uppercase mb-1">Producto</label>
-                <select value={newOrderProduct} onChange={e => { setNewOrderProduct(e.target.value); setNewOrderSize(''); }} className="w-full border-2 border-black p-3 font-bold uppercase" required>
-                  <option value="" disabled>Seleccionar...</option>
-                  {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                <label className="block font-mono font-bold text-sm uppercase mb-1">Modelo</label>
+                <select
+                  value={newOrderProductName}
+                  onChange={e => {
+                    setNewOrderProductName(e.target.value);
+                    setNewOrderProductColor(''); // Resetea color al cambiar modelo
+                    setNewOrderSize('');         // Resetea talla
+                  }}
+                  className="w-full border-2 border-black p-3 font-bold uppercase"
+                  required
+                >
+                  <option value="" disabled>Seleccionar modelo...</option>
+                  {/* Extraer nombres únicos para no duplicar en el select */}
+                  {Array.from(new Set(products.map(p => p.name))).map(uniqueName => (
+                    <option key={uniqueName} value={uniqueName}>{uniqueName}</option>
+                  ))}
                 </select>
               </div>
 
-              {newOrderProduct && (
+              {/* Selector 2: Color (Aparece al elegir modelo) */}
+              {newOrderProductName && (
+                <div>
+                  <label className="block font-mono font-bold text-sm uppercase mb-1">Color / Variante</label>
+                  <select
+                    value={newOrderProductColor}
+                    onChange={e => {
+                      setNewOrderProductColor(e.target.value);
+                      setNewOrderSize(''); // Resetea talla al cambiar color
+                    }}
+                    className="w-full border-2 border-black p-3 font-bold uppercase"
+                    required
+                  >
+                    <option value="" disabled>Seleccionar color...</option>
+                    {products
+                      .filter(p => p.name === newOrderProductName)
+                      .map(p => (
+                        <option key={p.id} value={p.color}>{p.color}</option>
+                      ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Selector 3: Talla (Aparece al elegir color) */}
+              {newOrderProductColor && (
                 <div>
                   <label className="block font-mono font-bold text-sm uppercase mb-1">Talla</label>
-                  <select value={newOrderSize} onChange={e => setNewOrderSize(e.target.value)} className="w-full border-2 border-black p-3 font-bold uppercase" required>
+                  <select
+                    value={newOrderSize}
+                    onChange={e => setNewOrderSize(e.target.value)}
+                    className="w-full border-2 border-black p-3 font-bold uppercase"
+                    required
+                  >
                     <option value="" disabled>Seleccionar talla...</option>
-                    {products.find(p => p.id === newOrderProduct)?.inventory.map(inv => (
-                      <option key={inv.size} value={inv.size} disabled={inv.stock_count === 0}>
-                        {inv.size} (Stock: {inv.stock_count})
-                      </option>
-                    ))}
+                    {products
+                      .find(p => p.name === newOrderProductName && p.color === newOrderProductColor)
+                      ?.inventory.map(inv => (
+                        <option key={inv.size} value={inv.size} disabled={inv.stock_count === 0}>
+                          {inv.size} (Stock: {inv.stock_count})
+                        </option>
+                      ))}
                   </select>
                 </div>
               )}
