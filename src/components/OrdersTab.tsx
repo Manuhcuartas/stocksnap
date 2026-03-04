@@ -14,14 +14,58 @@ export default function OrdersTab({ orders, products, onOpenModal, onUpdateStatu
     const [filterStatus, setFilterStatus] = useState<string>('all');
     const [filterProduct, setFilterProduct] = useState<string>('all');
 
+    // Filtrado
     const filteredOrders = orders.filter(order => {
         const matchStatus = filterStatus === 'all' || order.status === filterStatus;
         const matchProduct = filterProduct === 'all' || order.order_items?.some(item => item.products?.name === filterProduct);
         return matchStatus && matchProduct;
     });
 
+    // Generador de CSV Logístico
+    const exportToCSV = () => {
+        // Solo exportamos los que están pagados y listos para preparar
+        const exportableOrders = orders.filter(o => o.status === 'pagado');
+
+        if (exportableOrders.length === 0) {
+            alert("No hay pedidos pagados para exportar.");
+            return;
+        }
+
+        // Cabeceras del Excel
+        let csvContent = "Ticket,Cliente IG,Prenda,Color,Talla,Cantidad\n";
+
+        exportableOrders.forEach(order => {
+            const ticketId = order.id.split('-')[0].toUpperCase();
+
+            order.order_items?.forEach(item => {
+                // Envolvemos en comillas para evitar problemas con comas en nombres
+                const row = [
+                    `"${ticketId}"`,
+                    `"${order.customer_info}"`,
+                    `"${item.products?.name}"`,
+                    `"${item.products?.color}"`,
+                    `"${item.size}"`,
+                    `"${item.quantity}"`
+                ].join(",");
+
+                csvContent += row + "\n";
+            });
+        });
+
+        // Crear y descargar el archivo
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `logistica_pagados_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     return (
         <div className="space-y-4">
+            {/* HUD de Métricas Rápidas */}
             <div className="grid grid-cols-2 gap-2 mb-4 font-mono font-bold text-xs text-center">
                 <div className="bg-yellow-100 border-2 border-black p-2">
                     <span className="block text-xl font-black">{orders.filter(o => o.status === 'pendiente_pago').length}</span> Pendiente de pago
@@ -37,10 +81,17 @@ export default function OrdersTab({ orders, products, onOpenModal, onUpdateStatu
                 </div>
             </div>
 
-            <button onClick={onOpenModal} className="w-full bg-[#ccff00] text-black border-4 border-black p-4 font-black uppercase text-xl shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] active:translate-y-[4px] active:translate-x-[4px] active:shadow-none transition-all mb-4">
-                + Nuevo Pedido
-            </button>
+            <div className="flex gap-2 mb-4">
+                <button onClick={onOpenModal} className="flex-1 bg-[#ccff00] text-black border-4 border-black p-3 font-black uppercase text-lg shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-y-[2px] active:translate-x-[2px] active:shadow-none transition-all">
+                    + Pedido
+                </button>
+                <button onClick={exportToCSV} className="bg-white text-black border-4 border-black p-3 font-black uppercase text-sm shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-y-[2px] active:translate-x-[2px] active:shadow-none transition-all flex flex-col items-center justify-center">
+                    <span>CSV</span>
+                    <span className="text-[10px] font-mono">Preparar</span>
+                </button>
+            </div>
 
+            {/* CONTROLES DE FILTRO */}
             <div className="flex gap-2 mb-4">
                 <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="flex-1 border-2 border-black p-2 font-bold text-xs uppercase bg-white outline-none">
                     <option value="all">Todos los estados</option>
@@ -57,6 +108,7 @@ export default function OrdersTab({ orders, products, onOpenModal, onUpdateStatu
                 </select>
             </div>
 
+            {/* LISTA DE PEDIDOS */}
             {filteredOrders.length === 0 ? (
                 <p className="text-center font-mono font-bold text-gray-500 py-10">No hay pedidos que coincidan.</p>
             ) : (
