@@ -21,9 +21,8 @@ export default function OrdersTab({ orders, products, onOpenModal, onUpdateStatu
         return matchStatus && matchProduct;
     });
 
-    // Generador de CSV Logístico
+    // Generador de CSV Logístico (Optimizado para Excel en celdas)
     const exportToCSV = () => {
-        // Solo exportamos los que están pagados y listos para preparar
         const exportableOrders = orders.filter(o => o.status === 'pagado');
 
         if (exportableOrders.length === 0) {
@@ -31,14 +30,14 @@ export default function OrdersTab({ orders, products, onOpenModal, onUpdateStatu
             return;
         }
 
-        // Cabeceras del Excel
-        let csvContent = "Ticket,Cliente IG,Prenda,Color,Talla,Cantidad\n";
+        // \uFEFF es el BOM (Byte Order Mark) para que Excel lea los acentos.
+        // Usamos punto y coma (;) como separador de columnas.
+        let csvContent = "\uFEFFTicket;Cliente IG;Prenda;Color;Talla;Cantidad\n";
 
         exportableOrders.forEach(order => {
             const ticketId = order.id.split('-')[0].toUpperCase();
 
             order.order_items?.forEach(item => {
-                // Envolvemos en comillas para evitar problemas con comas en nombres
                 const row = [
                     `"${ticketId}"`,
                     `"${order.customer_info}"`,
@@ -46,13 +45,12 @@ export default function OrdersTab({ orders, products, onOpenModal, onUpdateStatu
                     `"${item.products?.color}"`,
                     `"${item.size}"`,
                     `"${item.quantity}"`
-                ].join(",");
+                ].join(";"); // <-- Separador cambiado a punto y coma
 
                 csvContent += row + "\n";
             });
         });
 
-        // Crear y descargar el archivo
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
